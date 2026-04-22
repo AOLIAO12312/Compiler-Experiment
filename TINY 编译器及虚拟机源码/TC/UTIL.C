@@ -36,6 +36,7 @@ void printToken( TokenType token, const char* tokenString )
     case TIMES: fprintf(listing,"*\n"); break;
     case OVER: fprintf(listing,"/\n"); break;
     case ENDFILE: fprintf(listing,"EOF\n"); break;
+    case GT: fprintf(listing,">\n"); break;
     case NUM:
       fprintf(listing,
           "NUM, val= %s\n",tokenString);

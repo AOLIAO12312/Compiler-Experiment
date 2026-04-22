@@ -136,6 +136,9 @@ TokenType getToken(void)
              case ';':
                currentToken = SEMI;
                break;
+              case '>':
+                currentToken = GT;
+                break;
              default:
                currentToken = ERROR;
                break;
