@@ -11,7 +11,10 @@
 
 /* states in scanner DFA */
 typedef enum
-   { START,INASSIGN,INCOMMENT,INNUM,INID,DONE }
+   { START,INASSIGN,INCOMMENT,INNUM,INID,DONE,
+     INFLOAT,INEXP,INEXPSIGN,INEXPNUM,
+     INCOMMENT2,INCOMMENT2_STAR
+   }
    StateType;
 
 /* lexeme of identifier or reserved word */
@@ -102,6 +105,19 @@ TokenType getToken(void)
          { save = FALSE;
            state = INCOMMENT;
          }
+         else if (c == '/')
+         { /* peek: is next char '*'? */
+           int next = getNextChar();
+           if (next == '*')
+           { save = FALSE;
+             state = INCOMMENT2;
+           }
+           else
+           { ungetNextChar();
+             state = DONE;
+             currentToken = OVER;
+           }
+         }
          else
          { state = DONE;
            switch (c)
@@ -124,9 +140,6 @@ TokenType getToken(void)
              case '*':
                currentToken = TIMES;
                break;
-             case '/':
-               currentToken = OVER;
-               break;
              case '(':
                currentToken = LPAREN;
                break;
@@ -136,15 +149,16 @@ TokenType getToken(void)
              case ';':
                currentToken = SEMI;
                break;
-              case '>':
-                currentToken = GT;
-                break;
+             case '>':
+               currentToken = GT;
+               break;
              default:
                currentToken = ERROR;
                break;
            }
          }
          break;
+       /* original { } comment */
        case INCOMMENT:
          save = FALSE;
          if (c == EOF)
@@ -152,6 +166,33 @@ TokenType getToken(void)
            currentToken = ENDFILE;
          }
          else if (c == '}') state = START;
+         break;
+       /* C-style multi-line comment: waiting for * */
+       case INCOMMENT2:
+         save = FALSE;
+         if (c == EOF)
+         { state = DONE;
+           fprintf(listing,"ERROR at line %d: unterminated comment\n",lineno);
+           currentToken = ERROR;
+         }
+         else if (c == '*')
+           state = INCOMMENT2_STAR;
+         /* else stay in INCOMMENT2 */
+         break;
+       /* C-style multi-line comment: saw *, waiting for / */
+       case INCOMMENT2_STAR:
+         save = FALSE;
+         if (c == EOF)
+         { state = DONE;
+           fprintf(listing,"ERROR at line %d: unterminated comment\n",lineno);
+           currentToken = ERROR;
+         }
+         else if (c == '/')
+           state = START;   /* comment closed */
+         else if (c == '*')
+           /* stay: another * seen */;
+         else
+           state = INCOMMENT2;
          break;
        case INASSIGN:
          state = DONE;
@@ -164,13 +205,123 @@ TokenType getToken(void)
            currentToken = ERROR;
          }
          break;
+       /* integer part of a number */
        case INNUM:
-         if (!isdigit(c))
-         { /* backup in the input */
-           ungetNextChar();
+         if (c == '.')
+         { /* peek next char to decide float vs error */
+           int next = getNextChar();
+           ungetNextChar(); /* always put next back; '.' is still current c */
+           if (isdigit(next) || next == 'E' || next == 'e')
+           { /* valid float start: keep '.' in tokenString, go to INFLOAT */
+             state = INFLOAT;
+           }
+           else
+           { /* e.g. "3." with no digit/E after -> just NUM, put '.' back */
+             ungetNextChar(); /* put back '.' itself */
+             save = FALSE;
+             state = DONE;
+             currentToken = NUM;
+           }
+         }
+         else if (c == 'E' || c == 'e')
+           state = INEXP;
+         else if (isalpha(c))
+         { /* e.g. 2n -> error */
+           save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal token '%s%c'\n",
+                   lineno,tokenString,(char)c);
+           currentToken = ERROR;
+         }
+         else if (!isdigit(c))
+         { ungetNextChar();
            save = FALSE;
            state = DONE;
            currentToken = NUM;
+         }
+         break;
+       /* fractional digits after '.' */
+       case INFLOAT:
+         if (c == 'E' || c == 'e')
+           state = INEXP;
+         else if (c == '.')
+         { /* second dot -> error, e.g. 1.2.3 */
+           save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal float '%s.'\n",
+                   lineno,tokenString);
+           currentToken = ERROR;
+         }
+         else if (isalpha(c))
+         { save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal float '%s%c'\n",
+                   lineno,tokenString,(char)c);
+           currentToken = ERROR;
+         }
+         else if (!isdigit(c))
+         { ungetNextChar();
+           save = FALSE;
+           state = DONE;
+           currentToken = FLOAT;
+         }
+         break;
+       /* seen E/e, expect optional sign or digit */
+       case INEXP:
+         if (c == '+' || c == '-')
+           state = INEXPSIGN;
+         else if (isdigit(c))
+           state = INEXPNUM;
+         else
+         { /* E not followed by sign or digit -> error */
+           save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal exponent in '%s'\n",
+                   lineno,tokenString);
+           currentToken = ERROR;
+         }
+         break;
+       /* seen E+ or E-, must have digit next */
+       case INEXPSIGN:
+         if (isdigit(c))
+           state = INEXPNUM;
+         else
+         { save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal exponent in '%s'\n",
+                   lineno,tokenString);
+           currentToken = ERROR;
+         }
+         break;
+       /* digits of exponent */
+       case INEXPNUM:
+         if (c == '.')
+         { /* e.g. 100.E1.2 -> error */
+           save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal float '%s.'\n",
+                   lineno,tokenString);
+           currentToken = ERROR;
+         }
+         else if (isalpha(c))
+         { save = FALSE;
+           state = DONE;
+           tokenString[tokenStringIndex] = '\0';
+           fprintf(listing,"ERROR at line %d: illegal float '%s%c'\n",
+                   lineno,tokenString,(char)c);
+           currentToken = ERROR;
+         }
+         else if (!isdigit(c))
+         { ungetNextChar();
+           save = FALSE;
+           state = DONE;
+           currentToken = FLOAT;
          }
          break;
        case INID:

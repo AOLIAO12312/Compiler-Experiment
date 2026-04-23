@@ -1,0 +1,24 @@
+{ test case 1: normal float numbers }
+x := 3.14;
+y := 0.5;
+z := 100.0;
+
+{ test case 2: scientific notation }
+a := 1.5E3.0;
+b := 2.0e-4;
+c := 100E2;
+d := 6.02E+23;
+
+/* test case 3: multi-line comment
+   this comment spans
+   multiple lines */
+read n;
+write n;
+
+{ test case 4: error - digit followed by letter }
+bad1 := 2n;
+
+{ test case 5: error - double dot in float }
+bad2 := 100.E1.2;
+
+/* test case 6: unterminated comment - no closing

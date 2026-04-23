@@ -1,0 +1,29 @@
+{ demo_exp2.tny
+  Demonstrates Lab 2 extensions that work at compile time:
+  1. C-style multi-line comments /* */
+  2. Normal integer program (TINY only supports integers at runtime)
+  Read x, compute square and cube, then sum 1..x
+}
+
+/* This is a multi-line comment.
+   It spans several lines.
+   The scanner skips all content here. */
+
+read x;
+
+/* compute square and cube */
+square := x * x;
+cube := x * x * x;
+
+write square;
+write cube;
+
+{ sum from 1 to x using repeat-until }
+sum := 0;
+i := 1;
+repeat
+  sum := sum + i;
+  i := i + 1
+until i = x;
+
+write sum
