@@ -8,7 +8,7 @@
 #include "globals.h"
 
 /* set NO_PARSE to TRUE to get a scanner-only compiler */
-#define NO_PARSE TRUE
+#define NO_PARSE FALSE
 /* set NO_ANALYZE to TRUE to get a parser-only compiler */
 #define NO_ANALYZE FALSE
 
@@ -37,9 +37,9 @@ FILE * listing;
 FILE * code;
 
 /* allocate and set tracing flags */
-int EchoSource = FALSE;
+int EchoSource = TRUE;
 int TraceScan = TRUE;
-int TraceParse = FALSE;
+int TraceParse = TRUE;
 int TraceAnalyze = FALSE;
 int TraceCode = FALSE;
 

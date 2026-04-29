@@ -129,7 +129,14 @@ TokenType getToken(void)
                currentToken = EQ;
                break;
              case '<':
-               currentToken = LT;
+               { int next = getNextChar();
+                 if (next == '=')
+                   currentToken = LTE;
+                 else
+                 { ungetNextChar();
+                   currentToken = LT;
+                 }
+               }
                break;
              case '+':
                currentToken = PLUS;
@@ -150,7 +157,14 @@ TokenType getToken(void)
                currentToken = SEMI;
                break;
              case '>':
-               currentToken = GT;
+               { int next = getNextChar();
+                 if (next == '=')
+                   currentToken = GTE;
+                 else
+                 { ungetNextChar();
+                   currentToken = GT;
+                 }
+               }
                break;
              default:
                currentToken = ERROR;

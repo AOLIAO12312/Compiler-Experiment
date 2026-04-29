@@ -1,0 +1,30 @@
+{ Test program for experiment 3: <= and >= operators }
+read x;
+read y;
+
+{ test <= : if x <= y, write 1; else write 0 }
+if x <= y then
+  write x
+end;
+
+{ test >= : if x >= y, write 1; else write 0 }
+if x >= y then
+  write y
+end;
+
+{ test <= with constants: if x <= 10 }
+if x <= 10 then
+  write x
+end;
+
+{ test >= with constants: if x >= 5 }
+if x >= 5 then
+  write x
+end;
+
+{ test both in repeat-until }
+z := 0;
+repeat
+  z := z + 1;
+  write z
+until z >= 5
