@@ -59,6 +59,21 @@ static void insertNode( TreeNode * t)
              add line number of use only */ 
             st_insert(t->attr.name,t->lineno,0);
           break;
+        case IntK:
+          { int i;
+            for (i=0; i < MAXCHILDREN; i++)
+            { if (t->child[i] != NULL)
+              { char * name = NULL;
+                if (t->child[i]->nodekind == ExpK && t->child[i]->kind.exp == IdK)
+                  name = t->child[i]->attr.name;
+                else if (t->child[i]->nodekind == StmtK && t->child[i]->kind.stmt == AssignK)
+                  name = t->child[i]->attr.name;
+                if (name != NULL && st_lookup(name) == -1)
+                  st_insert(name,t->lineno,location++);
+              }
+            }
+          }
+          break;
         default:
           break;
       }
@@ -107,9 +122,15 @@ static void checkNode(TreeNode * t)
   { case ExpK:
       switch (t->kind.exp)
       { case OpK:
-          if ((t->child[0]->type != Integer) ||
-              (t->child[1]->type != Integer))
-            typeError(t,"Op applied to non-integer");
+          if (t->child[1] == NULL) {
+            /* unary operator */
+            if (t->child[0]->type != Integer)
+              typeError(t,"Op applied to non-integer");
+          } else {
+            if ((t->child[0]->type != Integer) ||
+                (t->child[1]->type != Integer))
+              typeError(t,"Op applied to non-integer");
+          }
           if ((t->attr.op == EQ) || (t->attr.op == LT) || (t->attr.op == LTE) || (t->attr.op == GT) || (t->attr.op == GTE))
             t->type = Boolean;
           else

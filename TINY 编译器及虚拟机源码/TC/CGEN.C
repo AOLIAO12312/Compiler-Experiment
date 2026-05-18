@@ -89,6 +89,19 @@ static void genStmt( TreeNode * tree)
          /* now output it */
          emitRO("OUT",ac,0,0,"write ac");
          break;
+      case IntK:
+         { int i;
+           for (i=0; i < MAXCHILDREN; i++)
+           { if (tree->child[i] != NULL)
+             { if (tree->child[i]->nodekind == StmtK &&
+                   tree->child[i]->kind.stmt == AssignK)
+                 /* initialized variable: generate assignment code */
+                 cGen(tree->child[i]);
+               /* uninitialized variable: just allocate, analyzer did st_insert */
+             }
+           }
+         }
+         break;
       default:
          break;
     }
@@ -118,6 +131,19 @@ static void genExp( TreeNode * tree)
          if (TraceCode) emitComment("-> Op") ;
          p1 = tree->child[0];
          p2 = tree->child[1];
+         if (p2 == NULL) {
+           /* unary operator (e.g., unary minus) */
+           cGen(p1);
+           switch (tree->attr.op) {
+              case MINUS :
+                 emitRM("LDC",ac1,0,0,"load 0 for unary minus");
+                 emitRO("SUB",ac,ac1,ac,"op unary -");
+                 break;
+              default:
+                 emitComment("BUG: Unknown unary operator");
+                 break;
+           }
+         } else {
          /* gen code for ac = left arg */
          cGen(p1);
          /* gen code to push left operand */
@@ -178,6 +204,7 @@ static void genExp( TreeNode * tree)
                emitComment("BUG: Unknown operator");
                break;
          } /* case op */
+         } /* end else binary op */
          if (TraceCode)  emitComment("<- Op") ;
          break; /* OpK */
 

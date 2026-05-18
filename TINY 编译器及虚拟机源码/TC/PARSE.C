@@ -20,6 +20,7 @@ static TreeNode * repeat_stmt(void);
 static TreeNode * assign_stmt(void);
 static TreeNode * read_stmt(void);
 static TreeNode * write_stmt(void);
+static TreeNode * int_stmt(void);
 static TreeNode * exp(void);
 static TreeNode * simple_exp(void);
 static TreeNode * term(void);
@@ -67,6 +68,7 @@ TreeNode * statement(void)
     case ID : t = assign_stmt(); break;
     case READ : t = read_stmt(); break;
     case WRITE : t = write_stmt(); break;
+    case INT : t = int_stmt(); break;
     default : syntaxError("unexpected token -> ");
               printToken(token,tokenString);
               token = getToken();
@@ -121,6 +123,57 @@ TreeNode * write_stmt(void)
 { TreeNode * t = newStmtNode(WriteK);
   match(WRITE);
   if (t!=NULL) t->child[0] = exp();
+  return t;
+}
+
+TreeNode * int_stmt(void)
+{ TreeNode * t = newStmtNode(IntK);
+  match(INT);
+  int child_idx = 0;
+  /* parse first variable */
+  if ((t!=NULL) && (token==ID))
+  { char * name = copyString(tokenString);
+    match(ID);
+    if (token==ASSIGN)
+    { match(ASSIGN);
+      TreeNode * assign = newStmtNode(AssignK);
+      if (assign!=NULL)
+      { assign->attr.name = name;
+        assign->child[0] = exp();
+      }
+      if (child_idx < MAXCHILDREN) t->child[child_idx] = assign;
+    }
+    else
+    { TreeNode * id_node = newExpNode(IdK);
+      if (id_node!=NULL) id_node->attr.name = name;
+      if (child_idx < MAXCHILDREN) t->child[child_idx] = id_node;
+    }
+    child_idx++;
+  }
+  /* parse additional variables separated by comma */
+  while (token==COMMA && child_idx < MAXCHILDREN)
+  { match(COMMA);
+    if (token==ID)
+    { char * name = copyString(tokenString);
+      match(ID);
+      if (token==ASSIGN)
+      { match(ASSIGN);
+        TreeNode * assign = newStmtNode(AssignK);
+        if (assign!=NULL)
+        { assign->attr.name = name;
+          assign->child[0] = exp();
+        }
+        if (child_idx < MAXCHILDREN) t->child[child_idx] = assign;
+      }
+      else
+      { TreeNode * id_node = newExpNode(IdK);
+        if (id_node!=NULL) id_node->attr.name = name;
+        if (child_idx < MAXCHILDREN) t->child[child_idx] = id_node;
+      }
+      child_idx++;
+    }
+  }
+  match(SEMI);
   return t;
 }
 
@@ -189,6 +242,14 @@ TreeNode * factor(void)
       match(LPAREN);
       t = exp();
       match(RPAREN);
+      break;
+    case MINUS :
+      match(MINUS);
+      t = newExpNode(OpK);
+      if (t!=NULL)
+      { t->attr.op = MINUS;
+        t->child[0] = factor();
+      }
       break;
     default:
       syntaxError("unexpected token -> ");

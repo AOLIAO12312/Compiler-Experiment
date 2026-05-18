@@ -22,6 +22,7 @@
 #include "scan.h"
 #else
 #include "parse.h"
+#include "makedot.h"
 #if !NO_ANALYZE
 #include "analyze.h"
 #if !NO_CODE
@@ -69,6 +70,17 @@ main( int argc, char * argv[] )
   if (TraceParse) {
     fprintf(listing,"\nSyntax tree:\n");
     printTree(syntaxTree);
+  }
+  if (!Error)
+  { char * dotfile;
+    int fnlen = strcspn(pgm,".");
+    dotfile = (char *) calloc(fnlen+5, sizeof(char));
+    strncpy(dotfile,pgm,fnlen);
+    dotfile[fnlen] = '\0';
+    strcat(dotfile,".dot");
+    outputGraphvizFormat(dotfile,syntaxTree);
+    fprintf(listing,"\nAST Graphviz file generated: %s\n",dotfile);
+    free(dotfile);
   }
 #if !NO_ANALYZE
   if (! Error)

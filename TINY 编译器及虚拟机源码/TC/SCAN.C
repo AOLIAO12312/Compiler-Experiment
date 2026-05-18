@@ -61,7 +61,7 @@ static struct
     } reservedWords[MAXRESERVED]
    = {{"if",IF},{"then",THEN},{"else",ELSE},{"end",END},
       {"repeat",REPEAT},{"until",UNTIL},{"read",READ},
-      {"write",WRITE}};
+      {"write",WRITE},{"int",INT}};
 
 /* lookup an identifier to see if it is a reserved word */
 /* uses linear search */
@@ -155,6 +155,9 @@ TokenType getToken(void)
                break;
              case ';':
                currentToken = SEMI;
+               break;
+             case ',':
+               currentToken = COMMA;
                break;
              case '>':
                { int next = getNextChar();

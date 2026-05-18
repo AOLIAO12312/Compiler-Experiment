@@ -4,17 +4,16 @@
 输入：输出流、语法树“根节点”、递归深度（仅用作打印记号）
 输出：指定路径的Graphviz(DOT语言)文件
 */
-char *optab[28] = { "EOF","ERR",
-                    "IF","THEN","ELSE","END","REPEAT","UNTIL","READ","WRITE",
-                    "ID","NUM",
-                    ":=","=","<","<=",">",">=","+","-","*","/","(",")",";", "," ,"++",
-                    "INT"
+char *optab[] = { "EOF","ERR",
+                    "IF","THEN","ELSE","END","REPEAT","UNTIL","READ","WRITE","INT",
+                    "ID","NUM","FLOAT",
+                    ":=","=","<","<=",">",">=","+","-","*","/","(",")",";",","
                   };
 
 const int N = 100;
-treeNode * drawn_opnode[N] = {NULL};
-int index = 0;
-int isdrawn(treeNode* t){// 判断当前op节点是否已经绘制
+TreeNode * drawn_opnode[N] = {NULL};
+int op_index = 0;
+int isdrawn(TreeNode* t){// 判断当前op节点是否已经绘制
     int res = FALSE;
     if (t != NULL){
         for (int i = 0; i < N; i++){
@@ -30,7 +29,7 @@ int isdrawn(treeNode* t){// 判断当前op节点是否已经绘制
     return res;
 }
 
-void CreateGraphvizFormat(FILE* pf, treeNode* syntaxtree, unsigned depth)
+void CreateGraphvizFormat(FILE* pf, TreeNode* syntaxtree, unsigned depth)
 {
     //
     if (syntaxtree->nodekind == StmtK){
@@ -74,6 +73,7 @@ void CreateGraphvizFormat(FILE* pf, treeNode* syntaxtree, unsigned depth)
                     fprintf(pf, "\"%d\"->{\"%d\"};\n", syntaxtree, syntaxtree->child[i]);
                 }else break;
             }
+            break;
         default:
             break;
         }
@@ -89,19 +89,18 @@ void CreateGraphvizFormat(FILE* pf, treeNode* syntaxtree, unsigned depth)
         case OpK:
             if (!isdrawn(syntaxtree)){// 当前op节点尚未绘制
                 fprintf(pf, "\"%d\"[label = \"[OpK:%s]\"];\n", syntaxtree, optab[syntaxtree->attr.op]);
-                if (syntaxtree->attr.op == PP){// 自增运算只有一个孩子节点
+                if (syntaxtree->child[1] == NULL){// 单目运算符只有一个孩子节点
                     CreateGraphvizFormat(pf, syntaxtree->child[0], depth+1);
                     fprintf(pf, "\"%d\"->\"%d\";\n", syntaxtree, syntaxtree->child[0]);
                 }else{
                     CreateGraphvizFormat(pf, syntaxtree->child[0], depth+1);
                     CreateGraphvizFormat(pf, syntaxtree->child[1], depth+1);
-                    // fprintf(pf, "\"%d\"->{\"%d\"\"%d\"};\n", syntaxtree, syntaxtree->child[0], syntaxtree->child[1]);
                     fprintf(pf, "\"%d\"->\"%d\"[label = \"L\"];\n", syntaxtree, syntaxtree->child[0]);
                     fprintf(pf, "\"%d\"->\"%d\"[label = \"R\"];\n", syntaxtree, syntaxtree->child[1]);
                 }
                 
 
-                drawn_opnode[index++] = syntaxtree;
+                drawn_opnode[op_index++] = syntaxtree;
             }
             break;
         case ConstK:
@@ -128,7 +127,7 @@ void CreateGraphvizFormat(FILE* pf, treeNode* syntaxtree, unsigned depth)
 输入：输出文件路径
 输出：指定路径的Graphviz(DOT语言)文件
 */
-void outputGraphvizFormat(const char* outputFilePath, treeNode* syntaxtree)
+void outputGraphvizFormat(const char* outputFilePath, TreeNode* syntaxtree)
 {
     FILE *pf = fopen(outputFilePath, "w");
     if (pf == NULL) {
