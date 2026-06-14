@@ -37,17 +37,28 @@ typedef enum {
 typedef enum {
    /* RR instructions */
    opHALT,    /* RR     halt, operands are ignored */
-   opIN,      /* RR     read into reg(r); s and t are ignored */
-   opOUT,     /* RR     write from reg(r), s and t are ignored */
-   opADD,    /* RR     reg(r) = reg(s)+reg(t) */
-   opSUB,    /* RR     reg(r) = reg(s)-reg(t) */
-   opMUL,    /* RR     reg(r) = reg(s)*reg(t) */
-   opDIV,    /* RR     reg(r) = reg(s)/reg(t) */
+   opIN,      /* RR     read integer into reg(r) */
+   opOUT,     /* RR     write integer from reg(r) */
+   opADD,     /* RR     reg(r) = reg(s)+reg(t) */
+   opSUB,     /* RR     reg(r) = reg(s)-reg(t) */
+   opMUL,     /* RR     reg(r) = reg(s)*reg(t) */
+   opDIV,     /* RR     reg(r) = reg(s)/reg(t) */
+   opFADD,    /* RR     freg(r) = freg(s)+freg(t) */
+   opFSUB,    /* RR     freg(r) = freg(s)-freg(t) */
+   opFMUL,    /* RR     freg(r) = freg(s)*freg(t) */
+   opFDIV,    /* RR     freg(r) = freg(s)/freg(t) */
+   opFOUT,    /* RR     write float from freg(r) */
+   opFIN,     /* RR     read float into freg(r) */
+   opOUTC,    /* RR     write char from reg(r) */
+   opITOF,    /* RR     freg(r) = (float)reg(s) */
+   opFTOI,    /* RR     reg(r) = (int)freg(s) */
    opRRLim,   /* limit of RR opcodes */
 
    /* RM instructions */
-   opLD,      /* RM     reg(r) = mem(d+reg(s)) */
-   opST,      /* RM     mem(d+reg(s)) = reg(r) */
+   opLD,      /* RM     reg(r) = dMem[d+reg(s)] */
+   opST,      /* RM     dMem[d+reg(s)] = reg(r) */
+   opFLD,     /* RM     freg(r) = fMem[d+reg(s)] */
+   opFST,     /* RM     fMem[d+reg(s)] = freg(r) */
    opRMLim,   /* Limit of RM opcodes */
 
    /* RA instructions */
@@ -59,6 +70,7 @@ typedef enum {
    opJGE,     /* RA     if reg(r)>=0 then reg(7) = d+reg(s) */
    opJEQ,     /* RA     if reg(r)==0 then reg(7) = d+reg(s) */
    opJNE,     /* RA     if reg(r)!=0 then reg(7) = d+reg(s) */
+   opFLDC,    /* RA     freg(r) = bitcast of d */
    opRALim    /* Limit of RA opcodes */
    } OPCODE;
 
@@ -86,12 +98,18 @@ int icountflag = FALSE;
 INSTRUCTION iMem [IADDR_SIZE];
 int dMem [DADDR_SIZE];
 int reg [NO_REGS];
+float freg[NO_REGS];
+float fMem[DADDR_SIZE];
+float fnum;
 
 char * opCodeTab[]
-        = {"HALT","IN","OUT","ADD","SUB","MUL","DIV","????",
+        = {"HALT","IN","OUT","ADD","SUB","MUL","DIV",
+           "FADD","FSUB","FMUL","FDIV","FOUT","FIN","OUTC","ITOF",
+           "FTOI","????",
             /* RR opcodes */
-           "LD","ST","????", /* RM opcodes */
-           "LDA","LDC","JLT","JLE","JGT","JGE","JEQ","JNE","????"
+           "LD","ST","FLD","FST","????", /* RM opcodes */
+           "LDA","LDC","JLT","JLE","JGT","JGE","JEQ","JNE",
+           "FLDC","????"
            /* RA opcodes */
           };
 
@@ -180,6 +198,56 @@ int getNum (void)
 } /* getNum */
 
 /********************************************/
+int getFloat (void)
+{ int sign;
+  float term;
+  int temp = FALSE;
+  fnum = 0.0 ;
+  sign = 1;
+  while ( nonBlank() && ((ch == '+') || (ch == '-')) )
+  { temp = FALSE ;
+    if (ch == '-')  sign = - sign ;
+    getCh();
+  }
+  term = 0.0 ;
+  nonBlank();
+  while (isdigit(ch))
+  { temp = TRUE ;
+    term = term * 10.0f + (float)(ch - '0') ;
+    getCh();
+  }
+  if (ch == '.')
+  { getCh();
+    float frac = 0.1f;
+    while (isdigit(ch))
+    { temp = TRUE ;
+      term = term + frac * (float)(ch - '0') ;
+      frac *= 0.1f ;
+      getCh();
+    }
+  }
+  if (ch == 'e' || ch == 'E')
+  { getCh();
+    int expSign = 1;
+    if (ch == '+' || ch == '-')
+    { if (ch == '-') expSign = -1;
+      getCh();
+    }
+    int expVal = 0;
+    while (isdigit(ch))
+    { expVal = expVal * 10 + (ch - '0');
+      getCh();
+    }
+    if (expSign < 0)
+      for (int i = 0; i < expVal; i++) term /= 10.0f;
+    else
+      for (int i = 0; i < expVal; i++) term *= 10.0f;
+  }
+  fnum = term * (float)sign ;
+  return temp;
+} /* getFloat */
+
+/********************************************/
 int getWord (void)
 { int temp = FALSE;
   int length = 0;
@@ -223,10 +291,15 @@ int readInstructions (void)
   int arg1, arg2, arg3;
   int loc, regNo, lineNo;
   for (regNo = 0 ; regNo < NO_REGS ; regNo++)
-      reg[regNo] = 0 ;
+  { reg[regNo] = 0 ;
+    freg[regNo] = 0.0 ;
+  }
   dMem[0] = DADDR_SIZE - 1 ;
+  fMem[0] = 0.0 ;
   for (loc = 1 ; loc < DADDR_SIZE ; loc++)
-      dMem[loc] = 0 ;
+  { dMem[loc] = 0 ;
+    fMem[loc] = 0.0 ;
+  }
   for (loc = 0 ; loc < IADDR_SIZE ; loc++)
   { iMem[loc].iop = opHALT ;
     iMem[loc].iarg1 = 0 ;
@@ -377,9 +450,61 @@ STEPRESULT stepTM (void)
       else return srZERODIVIDE ;
       break;
 
+    case opFADD :  freg[r] = freg[s] + freg[t] ;  break;
+    case opFSUB :  freg[r] = freg[s] - freg[t] ;  break;
+    case opFMUL :  freg[r] = freg[s] * freg[t] ;  break;
+
+    case opFDIV :
+    /***********************************/
+      if ( freg[t] != 0.0 ) freg[r] = freg[s] / freg[t];
+      else return srZERODIVIDE ;
+      break;
+
+    case opFOUT :
+      printf ("FOUT instruction prints: %g\n", freg[r] ) ;
+      break;
+
+    case opFIN :
+    /***********************************/
+      do
+      { printf("Enter float value for FIN instruction: ") ;
+        fflush (stdin);
+        fflush (stdout);
+        gets(in_Line);
+        lineLen = strlen(in_Line) ;
+        inCol = 0;
+        ok = getFloat();
+        if ( ! ok ) printf ("Illegal value\n");
+        else freg[r] = fnum;
+      }
+      while (! ok);
+      break;
+
+    case opOUTC :
+      printf("%c", (char)reg[r]) ;
+      break;
+
+    case opITOF :
+      freg[r] = (float)reg[s] ;
+      break;
+
+    case opFTOI :
+      reg[r] = (int)freg[s] ;
+      break;
+
     /*************** RM instructions ********************/
     case opLD :    reg[r] = dMem[m] ;  break;
     case opST :    dMem[m] = reg[r] ;  break;
+
+    case opFLD :
+      if ( (m < 0) || (m >= DADDR_SIZE)) return srDMEM_ERR ;
+      freg[r] = fMem[m] ;
+      break;
+
+    case opFST :
+      if ( (m < 0) || (m >= DADDR_SIZE)) return srDMEM_ERR ;
+      fMem[m] = freg[r] ;
+      break;
 
     /*************** RA instructions ********************/
     case opLDA :    reg[r] = m ; break;
@@ -390,6 +515,15 @@ STEPRESULT stepTM (void)
     case opJGE :    if ( reg[r] >=  0 ) reg[PC_REG] = m ; break;
     case opJEQ :    if ( reg[r] == 0 ) reg[PC_REG] = m ; break;
     case opJNE :    if ( reg[r] != 0 ) reg[PC_REG] = m ; break;
+
+    case opFLDC :
+    /***********************************/
+      { int bits = currentinstruction.iarg2;
+        float f;
+        memcpy(&f, &bits, sizeof(float));
+        freg[r] = f;
+      }
+      break;
 
     /* end of legal instructions */
   } /* case */
@@ -435,6 +569,8 @@ int doCommand (void)
              "Print n iMem locations starting at b\n");
       printf("   d(Mem <b <n>>  "\
              "Print n dMem locations starting at b\n");
+      printf("   f(Mem <b <n>>  "\
+             "Print n fMem (float) locations starting at b\n");
       printf("   t(race         "\
              "Toggle instruction trace\n");
       printf("   p(rint         "\
@@ -466,10 +602,17 @@ int doCommand (void)
 
     case 'r' :
     /***********************************/
+      printf("Integer registers:\n");
       for (i = 0; i < NO_REGS; i++)
       { printf("%1d: %4d    ", i,reg[i]);
         if ( (i % 4) == 3 ) printf ("\n");
       }
+      printf("\nFloat registers:\n");
+      for (i = 0; i < NO_REGS; i++)
+      { printf("%1d: %10.6g ", i,freg[i]);
+        if ( (i % 4) == 3 ) printf ("\n");
+      }
+      printf("\n");
       break;
 
     case 'i' :
@@ -510,16 +653,40 @@ int doCommand (void)
       }
       break;
 
+    case 'f' :
+    /***********************************/
+      printcnt = 1 ;
+      if ( getNum  ())
+      { dloc = num ;
+        if ( getNum ()) printcnt = num ;
+      }
+      if ( ! atEOL ())
+        printf("Float data locations?\n");
+      else
+      { while ((dloc >= 0) && (dloc < DADDR_SIZE)
+                  && (printcnt > 0))
+        { printf("%5d: %10.6g\n",dloc,fMem[dloc]);
+          dloc++;
+          printcnt--;
+        }
+      }
+      break;
+
     case 'c' :
     /***********************************/
       iloc = 0;
       dloc = 0;
       stepcnt = 0;
       for (regNo = 0;  regNo < NO_REGS ; regNo++)
-            reg[regNo] = 0 ;
+      { reg[regNo] = 0 ;
+        freg[regNo] = 0.0 ;
+      }
       dMem[0] = DADDR_SIZE - 1 ;
+      fMem[0] = 0.0 ;
       for (loc = 1 ; loc < DADDR_SIZE ; loc++)
-            dMem[loc] = 0 ;
+      { dMem[loc] = 0 ;
+        fMem[loc] = 0.0 ;
+      }
       break;
 
     case 'q' : return FALSE;  /* break; */

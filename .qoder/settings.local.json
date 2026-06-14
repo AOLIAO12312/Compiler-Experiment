@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/Users/liaoyu/Code/Compiler-Experiment/TINY 编译器及虚拟机源码/Other\" && echo \"3+4*5\" | ./Calculator_BNF && echo \"10-2*3\" | ./Calculator_BNF && echo \"\\(1+2\\)*3\" | ./Calculator_BNF && echo \"100/5+3\" | ./Calculator_BNF)",
+      "Bash(cd \"/Users/liaoyu/Code/Compiler-Experiment/TINY 编译器及虚拟机源码/Other\" && echo \"3+4*5\" | ./Calculator_EBNF && echo \"10-2*3\" | ./Calculator_EBNF && echo \"\\(1+2\\)*3\" | ./Calculator_EBNF && echo \"100/5+3\" | ./Calculator_EBNF)",
+      "Bash(cd \"/Users/liaoyu/Code/Compiler-Experiment/TINY 编译器及虚拟机源码/Other\" && echo \"2-3-4\" | ./Calculator_BNF && echo \"2-3-4\" | ./Calculator_EBNF && echo \"12/3/2\" | ./Calculator_BNF && echo \"12/3/2\" | ./Calculator_EBNF)"
+    ]
+  }
+}
