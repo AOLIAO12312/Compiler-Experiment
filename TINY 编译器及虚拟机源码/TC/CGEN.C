@@ -74,22 +74,56 @@ static void genStmt( TreeNode * tree)
          cGen(tree->child[0]);
          /* now store value */
          loc = st_lookup(tree->attr.name);
-         emitRM("ST",ac,loc,gp,"assign: store value");
+         if (st_lookup_type(tree->attr.name) == Float)
+         { if (tree->child[0]->type == Integer)
+             emitRO("ITOF",ac,ac,0,"promote int to float");
+           emitRM("FST",ac,loc,gp,"assign: store float value");
+         }
+         else
+           emitRM("ST",ac,loc,gp,"assign: store value");
          if (TraceCode)  emitComment("<- assign") ;
          break; /* assign_k */
 
       case ReadK:
-         emitRO("IN",ac,0,0,"read integer value");
-         loc = st_lookup(tree->attr.name);
-         emitRM("ST",ac,loc,gp,"read: store value");
+         if (st_lookup_type(tree->attr.name) == Float)
+         { emitRO("FIN",ac,0,0,"read float value");
+           loc = st_lookup(tree->attr.name);
+           emitRM("FST",ac,loc,gp,"read: store float value");
+         }
+         else
+         { emitRO("IN",ac,0,0,"read integer value");
+           loc = st_lookup(tree->attr.name);
+           emitRM("ST",ac,loc,gp,"read: store value");
+         }
          break;
       case WriteK:
-         /* generate code for expression to write */
-         cGen(tree->child[0]);
-         /* now output it */
-         emitRO("OUT",ac,0,0,"write ac");
+         if (tree->child[0]->nodekind == ExpK &&
+             tree->child[0]->kind.exp == ConstK &&
+             tree->child[0]->type == Str)
+         { /* string literal: emit OUTC per character */
+           char *s = tree->child[0]->attr.strVal;
+           if (s != NULL)
+           { for (int i = 0; s[i] != '\0'; i++)
+             { emitRM("LDC",ac,(int)(unsigned char)s[i],0,"load char");
+               emitRO("OUTC",ac,0,0,"output char");
+             }
+           }
+           emitRM("LDC",ac,'\n',0,"load newline");
+           emitRO("OUTC",ac,0,0,"output newline");
+         }
+         else if (tree->child[0]->type == Float)
+         { /* float expression */
+           cGen(tree->child[0]);
+           emitRO("FOUT",ac,0,0,"write float");
+         }
+         else
+         { /* integer expression */
+           cGen(tree->child[0]);
+           emitRO("OUT",ac,0,0,"write ac");
+         }
          break;
       case IntK:
+      case FloatK:
          { int i;
            for (i=0; i < MAXCHILDREN; i++)
            { if (tree->child[i] != NULL)
@@ -115,15 +149,26 @@ static void genExp( TreeNode * tree)
 
     case ConstK :
       if (TraceCode) emitComment("-> Const") ;
-      /* gen code to load integer constant using LDC */
-      emitRM("LDC",ac,tree->attr.val,0,"load const");
+      if (tree->type == Float)
+      { float f = tree->attr.fval;
+        int bits;
+        memcpy(&bits, &f, sizeof(int));
+        emitRM("FLDC",ac,bits,0,"load float const");
+      }
+      else if (tree->type == Str)
+      { /* string constants handled in WriteK, no code needed here */ }
+      else
+        emitRM("LDC",ac,tree->attr.val,0,"load const");
       if (TraceCode)  emitComment("<- Const") ;
       break; /* ConstK */
     
     case IdK :
       if (TraceCode) emitComment("-> Id") ;
       loc = st_lookup(tree->attr.name);
-      emitRM("LD",ac,loc,gp,"load id value");
+      if (st_lookup_type(tree->attr.name) == Float)
+        emitRM("FLD",ac,loc,gp,"load float id value");
+      else
+        emitRM("LD",ac,loc,gp,"load id value");
       if (TraceCode)  emitComment("<- Id") ;
       break; /* IdK */
 
@@ -134,16 +179,112 @@ static void genExp( TreeNode * tree)
          if (p2 == NULL) {
            /* unary operator (e.g., unary minus) */
            cGen(p1);
+           if (p1->type == Float)
+           { /* float unary minus */
+             switch (tree->attr.op) {
+                case MINUS :
+                   emitRM("FLDC",ac1,0,0,"load 0.0 for unary minus");
+                   emitRO("FSUB",ac,ac1,ac,"op unary float -");
+                   break;
+                default:
+                   emitComment("BUG: Unknown unary float operator");
+                   break;
+             }
+           }
+           else
+           { /* integer unary minus */
+             switch (tree->attr.op) {
+                case MINUS :
+                   emitRM("LDC",ac1,0,0,"load 0 for unary minus");
+                   emitRO("SUB",ac,ac1,ac,"op unary -");
+                   break;
+                default:
+                   emitComment("BUG: Unknown unary operator");
+                   break;
+             }
+           }
+         } else if (tree->type == Float) {
+         /* binary float arithmetic */
+         /* gen code for left arg */
+         cGen(p1);
+         if (p1->type == Integer) emitRO("ITOF",ac,ac,0,"promote left to float");
+         /* push left float operand */
+         emitRM("FST",ac,tmpOffset--,mp,"op: push float left");
+         /* gen code for right operand */
+         cGen(p2);
+         if (p2->type == Integer) emitRO("ITOF",ac,ac,0,"promote right to float");
+         /* now load left float operand */
+         emitRM("FLD",ac1,++tmpOffset,mp,"op: load float left");
+         switch (tree->attr.op) {
+            case PLUS :
+               emitRO("FADD",ac,ac1,ac,"op float +");
+               break;
+            case MINUS :
+               emitRO("FSUB",ac,ac1,ac,"op float -");
+               break;
+            case TIMES :
+               emitRO("FMUL",ac,ac1,ac,"op float *");
+               break;
+            case OVER :
+               emitRO("FDIV",ac,ac1,ac,"op float /");
+               break;
+            default:
+               emitComment("BUG: Unknown float operator");
+               break;
+         }
+         } else {
+         /* integer or comparison ops */
+         int isFloatCmp = (p1->type == Float || p2->type == Float)
+                          && tree->type == Boolean;
+         if (isFloatCmp)
+         { /* float comparison: evaluate both as float, get diff, convert to int */
+           cGen(p1);
+           if (p1->type == Integer) emitRO("ITOF",ac,ac,0,"promote left for cmp");
+           emitRM("FST",ac,tmpOffset--,mp,"push float left for cmp");
+           cGen(p2);
+           if (p2->type == Integer) emitRO("ITOF",ac,ac,0,"promote right for cmp");
+           emitRM("FLD",ac1,++tmpOffset,mp,"load float left for cmp");
+           emitRO("FSUB",ac,ac1,ac,"float diff for cmp");
+           emitRO("FTOI",ac,ac,0,"convert diff to int");
+           /* now ac holds integer, use existing comparison logic */
            switch (tree->attr.op) {
-              case MINUS :
-                 emitRM("LDC",ac1,0,0,"load 0 for unary minus");
-                 emitRO("SUB",ac,ac1,ac,"op unary -");
+              case LT :
+                 emitRM("JLT",ac,2,pc,"br if true") ;
+                 emitRM("LDC",ac,0,ac,"false case") ;
+                 emitRM("LDA",pc,1,pc,"unconditional jmp") ;
+                 emitRM("LDC",ac,1,ac,"true case") ;
+                 break;
+              case EQ :
+                 emitRM("JEQ",ac,2,pc,"br if true");
+                 emitRM("LDC",ac,0,ac,"false case") ;
+                 emitRM("LDA",pc,1,pc,"unconditional jmp") ;
+                 emitRM("LDC",ac,1,ac,"true case") ;
+                 break;
+              case GT:
+                 emitRM("JGT",ac,2,pc,"br if true") ;
+                 emitRM("LDC",ac,0,ac,"false case") ;
+                 emitRM("LDA",pc,1,pc,"unconditional jmp") ;
+                 emitRM("LDC",ac,1,ac,"true case") ;
+                 break;
+              case LTE:
+                 emitRM("JLE",ac,2,pc,"br if true") ;
+                 emitRM("LDC",ac,0,ac,"false case") ;
+                 emitRM("LDA",pc,1,pc,"unconditional jmp") ;
+                 emitRM("LDC",ac,1,ac,"true case") ;
+                 break;
+              case GTE:
+                 emitRM("JGE",ac,2,pc,"br if true") ;
+                 emitRM("LDC",ac,0,ac,"false case") ;
+                 emitRM("LDA",pc,1,pc,"unconditional jmp") ;
+                 emitRM("LDC",ac,1,ac,"true case") ;
                  break;
               default:
-                 emitComment("BUG: Unknown unary operator");
+                 emitComment("BUG: Unknown float comparison");
                  break;
            }
-         } else {
+         }
+         else
+         { /* integer binary ops (existing logic) */
          /* gen code for ac = left arg */
          cGen(p1);
          /* gen code to push left operand */
@@ -204,6 +345,7 @@ static void genExp( TreeNode * tree)
                emitComment("BUG: Unknown operator");
                break;
          } /* case op */
+         } /* end integer binary */
          } /* end else binary op */
          if (TraceCode)  emitComment("<- Op") ;
          break; /* OpK */

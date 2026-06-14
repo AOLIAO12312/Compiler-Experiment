@@ -5,8 +5,8 @@
 输出：指定路径的Graphviz(DOT语言)文件
 */
 char *optab[] = { "EOF","ERR",
-                    "IF","THEN","ELSE","END","REPEAT","UNTIL","READ","WRITE","INT",
-                    "ID","NUM","FLOAT",
+                    "IF","THEN","ELSE","END","REPEAT","UNTIL","READ","WRITE","INT","FLOATKW",
+                    "ID","NUM","FLOAT","STRING",
                     ":=","=","<","<=",">",">=","+","-","*","/","(",")",";",","
                   };
 
@@ -69,7 +69,16 @@ void CreateGraphvizFormat(FILE* pf, TreeNode* syntaxtree, unsigned depth)
             fprintf(pf, "\"%d\"[label = \"[IntK]\"];\n", syntaxtree);
             for (int i = 0; i < MAXCHILDREN; i++){
                 if (syntaxtree->child[i]){
-                    CreateGraphvizFormat(pf, syntaxtree->child[i], depth+1);//identifier or expression
+                    CreateGraphvizFormat(pf, syntaxtree->child[i], depth+1);
+                    fprintf(pf, "\"%d\"->{\"%d\"};\n", syntaxtree, syntaxtree->child[i]);
+                }else break;
+            }
+            break;
+        case FloatK:
+            fprintf(pf, "\"%d\"[label = \"[FloatK]\"];\n", syntaxtree);
+            for (int i = 0; i < MAXCHILDREN; i++){
+                if (syntaxtree->child[i]){
+                    CreateGraphvizFormat(pf, syntaxtree->child[i], depth+1);
                     fprintf(pf, "\"%d\"->{\"%d\"};\n", syntaxtree, syntaxtree->child[i]);
                 }else break;
             }
@@ -104,11 +113,12 @@ void CreateGraphvizFormat(FILE* pf, TreeNode* syntaxtree, unsigned depth)
             }
             break;
         case ConstK:
-            if ((int)syntaxtree->attr.val == syntaxtree->attr.val){
+            if (syntaxtree->type == Float)
+                fprintf(pf, "\"%d\"[label = \"[ConstK:%g]\"];\n", syntaxtree, syntaxtree->attr.fval);
+            else if (syntaxtree->type == Str)
+                fprintf(pf, "\"%d\"[label = \"[ConstK:\\\"%s\\\"]\"];\n", syntaxtree, syntaxtree->attr.strVal);
+            else
                 fprintf(pf, "\"%d\"[label = \"[ConstK:%d]\"];\n", syntaxtree, (int)syntaxtree->attr.val);
-            }else{
-                fprintf(pf, "\"%d\"[label = \"[ConstK:%f]\"];\n", syntaxtree, syntaxtree->attr.val);
-            }
             break;
         case IdK:
             fprintf(pf, "\"%d\"[label = \"[IdK:%s]\"];\n", syntaxtree, syntaxtree->attr.name);

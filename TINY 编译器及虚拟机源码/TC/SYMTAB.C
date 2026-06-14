@@ -49,6 +49,7 @@ typedef struct BucketListRec
    { char * name;
      LineList lines;
      int memloc ; /* memory location for variable */
+     ExpType type; /* type of variable (Integer or Float) */
      struct BucketListRec * next;
    } * BucketList;
 
@@ -60,7 +61,7 @@ static BucketList hashTable[SIZE];
  * loc = memory location is inserted only the
  * first time, otherwise ignored
  */
-void st_insert( char * name, int lineno, int loc )
+void st_insert( char * name, int lineno, int loc, ExpType type )
 { int h = hash(name);
   BucketList l =  hashTable[h];
   while ((l != NULL) && (strcmp(name,l->name) != 0))
@@ -71,6 +72,7 @@ void st_insert( char * name, int lineno, int loc )
     l->lines = (LineList) malloc(sizeof(struct LineListRec));
     l->lines->lineno = lineno;
     l->memloc = loc;
+    l->type = type;
     l->lines->next = NULL;
     l->next = hashTable[h];
     hashTable[h] = l; }
@@ -83,7 +85,7 @@ void st_insert( char * name, int lineno, int loc )
   }
 } /* st_insert */
 
-/* Function st_lookup returns the memory 
+/* Function st_lookup returns the memory
  * location of a variable or -1 if not found
  */
 int st_lookup ( char * name )
@@ -95,14 +97,26 @@ int st_lookup ( char * name )
   else return l->memloc;
 }
 
+/* Function st_lookup_type returns the type
+ * of a variable or Integer if not found
+ */
+ExpType st_lookup_type ( char * name )
+{ int h = hash(name);
+  BucketList l =  hashTable[h];
+  while ((l != NULL) && (strcmp(name,l->name) != 0))
+    l = l->next;
+  if (l == NULL) return Integer;
+  else return l->type;
+}
+
 /* Procedure printSymTab prints a formatted 
  * listing of the symbol table contents 
  * to the listing file
  */
 void printSymTab(FILE * listing)
 { int i;
-  fprintf(listing,"Variable Name  Location   Line Numbers\n");
-  fprintf(listing,"-------------  --------   ------------\n");
+  fprintf(listing,"Variable Name  Location   Type     Line Numbers\n");
+  fprintf(listing,"-------------  --------   ----     ------------\n");
   for (i=0;i<SIZE;++i)
   { if (hashTable[i] != NULL)
     { BucketList l = hashTable[i];
@@ -110,6 +124,7 @@ void printSymTab(FILE * listing)
       { LineList t = l->lines;
         fprintf(listing,"%-14s ",l->name);
         fprintf(listing,"%-8d  ",l->memloc);
+        fprintf(listing,"%-7s  ",l->type == Float ? "float" : "int");
         while (t != NULL)
         { fprintf(listing,"%4d ",t->lineno);
           t = t->next;

@@ -1,0 +1,18 @@
+{ Test case for float support - Experiment 3 Part 2 }
+float x, y, z;
+x := 3.14;
+y := 2.5;
+z := x + y;
+write z;
+
+float a, b;
+a := 10.5;
+b := a * 2.0;
+write b;
+
+{ Test mixed int/float }
+int i;
+float f;
+i := 5;
+f := i;
+write f

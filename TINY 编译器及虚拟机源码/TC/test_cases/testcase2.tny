@@ -1,0 +1,4 @@
+{ Test case for string output - Experiment 3 Part 1 }
+write("scalene");
+write("isosceles");
+write("equilateral")

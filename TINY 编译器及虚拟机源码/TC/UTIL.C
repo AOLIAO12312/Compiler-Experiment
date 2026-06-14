@@ -23,6 +23,7 @@ void printToken( TokenType token, const char* tokenString )
     case READ:
     case WRITE:
     case INT:
+    case FLOATKW:
       fprintf(listing,
          "reserved word: %s\n",tokenString);
       break;
@@ -48,6 +49,10 @@ void printToken( TokenType token, const char* tokenString )
     case FLOAT:
       fprintf(listing,
           "FLOAT, val= %s\n",tokenString);
+      break;
+    case STRING:
+      fprintf(listing,
+          "STRING, val= %s\n",tokenString);
       break;
     case ID:
       fprintf(listing,
@@ -158,6 +163,9 @@ void printTree( TreeNode * tree )
         case IntK:
           fprintf(listing,"Int\n");
           break;
+        case FloatK:
+          fprintf(listing,"Float\n");
+          break;
         default:
           fprintf(listing,"Unknown ExpNode kind\n");
           break;
@@ -170,7 +178,12 @@ void printTree( TreeNode * tree )
           printToken(tree->attr.op,"\0");
           break;
         case ConstK:
-          fprintf(listing,"Const: %d\n",tree->attr.val);
+          if (tree->type == Float)
+            fprintf(listing,"Const: %g\n",tree->attr.fval);
+          else if (tree->type == Str)
+            fprintf(listing,"Const: \"%s\"\n",tree->attr.strVal);
+          else
+            fprintf(listing,"Const: %d\n",tree->attr.val);
           break;
         case IdK:
           fprintf(listing,"Id: %s\n",tree->attr.name);
